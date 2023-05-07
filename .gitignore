@@ -1,3 +1,4 @@
 venv*
 wandb*
 .vscode/
+__pycache__
