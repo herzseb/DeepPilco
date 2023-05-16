@@ -18,11 +18,11 @@ device = 'cpu'
 # check cuda speed in cluster
 
 
-def main(config):
+def main(config, wandb):
     # init environment
     env = gym.make('InvertedDoublePendulum-v4')
     # init polciy
-    agent = DeepPilco(config, env)
+    agent = DeepPilco(config, env, wandb)
     # initialise policy parameters randomly
     # agent.init_policy_parameters() # maybe add Xavier init
 
@@ -55,11 +55,15 @@ def main(config):
             # 8 Optimize policy
             agent.policy.update(optimizer=optimizer_policy, cost=cost)
             costs += cost
-        print(f'Avg policy cost {costs / config["train"]["epochs_policy"]}')
+        avg_costs = costs / config["train"]["epochs_policy"]
+        print(f'Avg policy cost {avg_costs}')
+        wandb.log({"policy avg cost": avg_costs})
 
         if torch.abs(cost - last_cost) < config["train"]["epsilon"]:
             break
-        last_cost = cost
+        #FIXME
+        if avg_costs < config["train"]["epsilon"]:
+            break
 
 
 if __name__ == "__main__":
@@ -73,6 +77,6 @@ if __name__ == "__main__":
         key = next(iter(item))
         config[key] = item[key]
     print(config)
-    # wandb.init(project=config["log"]["project"], config=config)
-    main(config)
+    wandb.init(project=config["log"]["project"], config=config)
+    main(config, wandb)
     wandb.finish()

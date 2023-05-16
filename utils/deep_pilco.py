@@ -8,7 +8,7 @@ device = 'cpu'
 
 
 class DeepPilco:
-    def __init__(self, config, env):
+    def __init__(self, config, env, wandb):
         self.policy = PolicyModel(input_size=config["train"]["input_size_policy"], hidden_size=config["train"]["hidden_size_policy"], hidden_layer=config["train"]
                                   ["hidden_layer_policy"], output_size=config["train"]["output_size_policy"], dropout_rate=config["train"]["dropout_training_policy"])
         self.policy = self.policy.to(device=device)
@@ -17,6 +17,7 @@ class DeepPilco:
         self.dynamics_model = self.dynamics_model.to(device=device)
         self.config = config
         self.env = env
+        self.wandb = wandb
 
 
     def sample_particles_from_init(self, env):
@@ -89,6 +90,7 @@ class DeepPilco:
             state = state.to(device=device)
             action = self.policy(state)
             action = action.detach().to("cpu")
+            self.wandb.log({"action": action})
             next_state = env.step(action)
             next_state = torch.tensor(next_state[0], dtype=torch.float32)
             state = state.to("cpu")
@@ -125,6 +127,7 @@ class DeepPilco:
                 loss.backward()
                 optimizer.step()
                 losses += loss
+        self.wandb.log({"dynamics model avg loss": losses / (len(dataloader)*epochs)})
         print(f"Epochs {epochs}, avg loss {losses / (len(dataloader)*epochs)}")
 
 

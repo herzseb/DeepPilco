@@ -1,0 +1,30 @@
+- log:
+    project: "DeepPilco"
+
+- train:
+    T: 25
+    K: 10
+    input_size_dynamic: 12
+    output_size_dynamic: 11
+    hidden_size_dynamic: 200
+    hidden_layer_dynamic: 4
+    dropout_training_dynamic: 0.05
+    dropout_sampling_dynamic: 0.5
+    input_size_policy: 11
+    output_size_policy: 1
+    hidden_size_policy: 50
+    hidden_layer_policy: 4
+    dropout_training_policy: 0.05
+    batch_size: 4
+    discount: 0.9
+    epsilon: 0.5
+    epochs_dynamic: 1000
+    epochs_policy: 500
+    playback_len: 10
+
+- env:
+    init_mean_position: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    init_std_position: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    l1: 1
+    l2: 1
+    cost_sigma : 1
