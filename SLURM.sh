@@ -14,4 +14,4 @@
 module load python/3.9.5
 module load cuda/11.4
 module load cudnn/8.2.2/cuda-11.4
-python train.py dummy_config.yaml
+python train.py slurm_config.yaml
