@@ -21,6 +21,9 @@ device = 'cpu'
 def main(config, wandb):
     # init environment
     env = gym.make('InvertedDoublePendulum-v4')
+    # seeds 
+    np.random.seed(config["train"]["seed"])
+    torch.manual_seed(config["train"]["seed"])
     # init polciy
     agent = DeepPilco(config, env, wandb)
     # initialise policy parameters randomly
@@ -28,8 +31,8 @@ def main(config, wandb):
 
     optimizer_dynamics_model = optim.SGD(
         agent.dynamics_model.parameters(), lr=0.001, momentum=0.9)
-    optimizer_policy = optim.SGD(
-        agent.policy.parameters(), lr=0.0001, momentum=0.9)
+    optimizer_policy = optim.Adam(
+        agent.policy.parameters(), lr=0.00001)
     last_cost = np.inf
     rollouts = []
     # 3 repeat until convergence
@@ -59,8 +62,8 @@ def main(config, wandb):
         print(f'Avg policy cost {avg_costs}')
         wandb.log({"policy avg cost": avg_costs})
 
-        if torch.abs(cost - last_cost) < config["train"]["epsilon"]:
-            break
+        # if torch.abs(cost - last_cost) < config["train"]["epsilon"]:
+        #     break
         #FIXME
         if avg_costs < config["train"]["epsilon"]:
             break

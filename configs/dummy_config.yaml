@@ -2,6 +2,7 @@
     project: "DeepPilco"
 
 - train:
+    seed: 1234
     T: 25
     K: 10
     input_size_dynamic: 12
@@ -9,7 +10,7 @@
     hidden_size_dynamic: 200
     hidden_layer_dynamic: 4
     dropout_training_dynamic: 0.05
-    dropout_sampling_dynamic: 0.5
+    dropout_sampling_dynamic: 0.05
     input_size_policy: 11
     output_size_policy: 1
     hidden_size_policy: 50
@@ -21,6 +22,9 @@
     epochs_dynamic: 100
     epochs_policy: 50
     playback_len: 10
+    costum_masks_for_dynamics_training: true
+    dynamic_training_particles: 20
+    policy_batch_size: 10
 
 - env:
     init_mean_position: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]

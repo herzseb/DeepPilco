@@ -19,7 +19,6 @@ class DeepPilco:
         self.env = env
         self.wandb = wandb
 
-
     def sample_particles_from_init(self, env):
         # return np.random.normal(loc=self.config["env"]["init_mean_position"], scale=self.config["env"]["init_std_position"], size=self.config["train"]["K"])
         state = env.reset()
@@ -32,51 +31,55 @@ class DeepPilco:
     def predict_trajectories(self):
         # init cost
         cost = 0
-        # Initialise set of K particles
-        self.particles = []
-        for k in range(self.config["train"]["K"]):
-            self.particles.append(
-                self.sample_particles_from_init(self.env).to(device=device))
-        # Sample BNN dynamics model weights Wk for each k (i.e. sample seed values for dropout mask)
-        self.masks = []
-        for k in range(self.config["train"]["K"]):
-            self.masks.append(CustomDropout(
-                dropout=self.config["train"]["dropout_sampling_dynamic"], size=self.config["train"]["hidden_size_dynamic"]))
-        # save trajectory
-        trajectory = torch.empty(
-            (0, self.config["train"]["output_size_dynamic"]), dtype=torch.float32, device=device)
-        # for each time step of T
-        for i in range(self.config["train"]["T"]):
-            posteriors = torch.empty(
-                (0, self.config["train"]["output_size_dynamic"]), dtype=torch.float32, device=device)
-            # for each particle
-            for particle, mask in zip(self.particles, self.masks):
-                # get action from policy
-                particle = torch.unsqueeze(particle, dim=0)
-                action = self.policy(particle)
-                # get posterior of weights W
-                delta_x = self.dynamics_model(
-                    x=particle, action=action, dropout=mask)
-                y = particle + delta_x
-                posteriors = torch.cat((posteriors, y), dim=0)
-            # fit one gaussian with mean and standard deviation from posterior
-            mean = torch.mean(posteriors, dim=0)
-            std = torch.std(posteriors, dim=0)
-            cost += self.cost(mean, std) * self.config["train"]["discount"]**i
-            # sample set of particles from gaussian
+        # for batch in batchsize
+        for j in range(self.config["train"]["policy_batch_size"]):
+            # Initialise set of K particles
             self.particles = []
             for k in range(self.config["train"]["K"]):
                 self.particles.append(
-                    self.sample_particles(mean=mean, std=std))
-            trajectory = torch.cat(
-                (trajectory, torch.unsqueeze(mean, dim=0)), dim=0)
+                    self.sample_particles_from_init(self.env).to(device=device))
+            # Sample BNN dynamics model weights Wk for each k (i.e. sample seed values for dropout mask)
+            self.masks = []
+            for k in range(self.config["train"]["K"]):
+                self.masks.append(CustomDropout(
+                    dropout=self.config["train"]["dropout_sampling_dynamic"], size=self.config["train"]["hidden_size_dynamic"]))
+            # save trajectory
+            trajectory = torch.empty(
+                (0, self.config["train"]["output_size_dynamic"]), dtype=torch.float32, device=device)
+            
+            # for each time step of T
+            for i in range(self.config["train"]["T"]):
+                posteriors = torch.empty(
+                    (0, self.config["train"]["output_size_dynamic"]), dtype=torch.float32, device=device)
+                # for each particle
+                for particle, mask in zip(self.particles, self.masks):
+                    # get action from policy
+                    particle = torch.unsqueeze(particle, dim=0)
+                    action = self.policy(particle)
+                    # get posterior of weights W
+                    delta_x = self.dynamics_model(
+                        x=particle, action=action, dropout=mask)
+                    y = particle + delta_x
+                    posteriors = torch.cat((posteriors, y), dim=0)
+                # fit one gaussian with mean and standard deviation from posterior
+                mean = torch.mean(posteriors, dim=0)
+                std = torch.std(posteriors, dim=0)
+                cost += self.cost(mean, std) * self.config["train"]["discount"]**i
+                # sample set of particles from gaussian
+                self.particles = []
+                for k in range(self.config["train"]["K"]):
+                    self.particles.append(
+                        self.sample_particles(mean=mean, std=std))
+                trajectory = torch.cat(
+                    (trajectory, torch.unsqueeze(mean, dim=0)), dim=0)
+        cost = cost / self.config["train"]["policy_batch_size"]
         return trajectory, cost
 
     def cost(self, state, std=None):
         l1 = self.config["env"]["l1"]
         l2 = self.config["env"]["l2"]
         d = torch.sqrt((state[3]*l1 + state[4]*l2 - (l1+l2))
-                        ** 2 + (state[1]*l1 + state[2]*l2)**2)
+                       ** 2 + (state[1]*l1 + state[2]*l2)**2)
         if std is not None:
             combined_var = std[1] + std[2] + std[3] + std[4]
             d = d*combined_var
@@ -120,14 +123,28 @@ class DeepPilco:
                 state, action, diff = item
                 state = state.to(device=device)
                 action = action.to(device=device)
-                out = self.dynamics_model(
-                    state, action, nn.Dropout(p=self.config["train"]["dropout_training_dynamic"]))
-                out = out.to("cpu")
-                loss = criterion(out, diff)
+                if self.config["train"]["costum_masks_for_dynamics_training"]:
+                    masks = []
+                    for k in range(self.config["train"]["dynamic_training_particles"]):
+                        masks.append(CustomDropout(
+                            dropout=self.config["train"]["dropout_sampling_dynamic"], size=self.config["train"]["hidden_size_dynamic"]))
+                else:
+                    masks = [nn.Dropout(p=self.config["train"]["dropout_training_dynamic"])
+                             ] * self.config["train"]["dynamic_training_particles"]
+                pred = torch.empty(
+                    (0, self.config["train"]["output_size_dynamic"]), dtype=torch.float32, device=device)
+                for mask in masks:
+                    out = self.dynamics_model(state, action, mask)
+                    pred = torch.cat((pred, out), dim=0)
+                pred = pred.to("cpu")
+                diff = diff.repeat(
+                    self.config["train"]["dynamic_training_particles"], 1)
+                loss = criterion(pred, diff)
                 loss.backward()
                 optimizer.step()
                 losses += loss
-        self.wandb.log({"dynamics model avg loss": losses / (len(dataloader)*epochs)})
+        self.wandb.log(
+            {"dynamics model avg loss": losses / (len(dataloader)*epochs)})
         print(f"Epochs {epochs}, avg loss {losses / (len(dataloader)*epochs)}")
 
 
@@ -149,6 +166,8 @@ class DynamicsModel(nn.Module):
         x = torch.concat((x, action), dim=1)
         x = self.first_layer(x)
         x = dropout(x)
+        if torch.isnan(x).any():
+            print("nan")
         for layer in range(len(self.mlp)):
             x = self.mlp[layer](x)
             x = dropout(x)
@@ -200,7 +219,7 @@ class CustomDropout(nn.Module):
         self.mask = torch.unsqueeze(self.mask, dim=0).to(device=device)
 
     def sample_mask(self, dropout, size):
-        return torch.bernoulli(torch.empty(size).uniform_(1-(dropout*2), 1)) * (1/dropout)
+        return torch.bernoulli(torch.empty(size).uniform_(1-(dropout*2), 1)) * (1/(1-dropout))
 
     def forward(self, x):
         return x * self.mask
