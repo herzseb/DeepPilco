@@ -13,7 +13,4 @@
 module load python/3.9.5
 module load cuda/11.4
 module load cudnn/8.2.2/cuda-11.4
-module load anaconda
-source activate deeppilco
 python train.py slurm_config.yaml
-source deactivate deeppilco
