@@ -19,8 +19,8 @@
     batch_size: 1
     discount: 0.9
     epsilon: 0.05
-    epochs_dynamic: 5000
-    epochs_policy: 1000
+    epochs_dynamic: 1000
+    epochs_policy: 500
     playback_len: 10
     costum_masks_for_dynamics_training: true
     dynamic_training_particles: 100

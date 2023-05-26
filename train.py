@@ -31,8 +31,8 @@ def main(config, wandb):
 
     optimizer_dynamics_model = optim.SGD(
         agent.dynamics_model.parameters(), lr=0.001, momentum=0.9)
-    optimizer_policy = optim.Adam(
-        agent.policy.parameters(), lr=0.00001)
+    optimizer_policy = optim.SGD(
+        agent.policy.parameters(), lr=0.00001, momentum=0.9)
     last_cost = np.inf
     rollouts = []
     # 3 repeat until convergence
@@ -56,7 +56,7 @@ def main(config, wandb):
             # 6 predict trjactories fomr p(X0) to p(Xt) predict_trajectories() and 7 Evaluate policy
             trajectory, cost = agent.predict_trajectories()
             # 8 Optimize policy
-            agent.policy.update(optimizer=optimizer_policy, cost=cost)
+            agent.policy.update(optimizer=optimizer_policy, cost=cost, model=agent.policy)
             costs += cost
         avg_costs = costs / config["train"]["epochs_policy"]
         print(f'Avg policy cost {avg_costs}')

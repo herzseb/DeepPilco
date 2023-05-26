@@ -195,8 +195,10 @@ class PolicyModel(nn.Module):
         x = self.tanh(x)
         return x
 
-    def update(self, optimizer, cost):
+    def update(self, optimizer, cost, model):
         cost.backward()
+        # Gradient Norm Clipping
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)
         optimizer.step()
 
 
