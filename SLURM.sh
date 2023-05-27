@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=DeepPilco          
 #SBATCH --nodes=1        
-#SBATCH --mem=40GB
+#SBATCH --mem=80GB
 #SBATCH --ntasks-per-node=4 
 #SBATCH --partition=long
 #SBATCH --qos=users        
