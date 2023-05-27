@@ -20,7 +20,7 @@
     discount: 0.9
     epsilon: 0.00001
     epochs_dynamic: 2
-    epochs_policy: 2
+    epochs_policy: 100
     playback_len: 10
     costum_masks_for_dynamics_training: true
     dynamic_training_particles: 20

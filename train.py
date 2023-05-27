@@ -57,7 +57,7 @@ def main(config, wandb):
             trajectory, cost = agent.predict_trajectories()
             # 8 Optimize policy
             agent.policy.update(optimizer=optimizer_policy, cost=cost, model=agent.policy)
-            costs += cost
+            costs += cost.item()
         avg_costs = costs / config["train"]["epochs_policy"]
         print(f'Avg policy cost {avg_costs}')
         wandb.log({"policy avg cost": avg_costs})

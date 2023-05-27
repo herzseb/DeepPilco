@@ -40,13 +40,14 @@ class DeepPilco:
                     self.sample_particles_from_init(self.env).to(device=device))
             # Sample BNN dynamics model weights Wk for each k (i.e. sample seed values for dropout mask)
             self.masks = []
-            for k in range(self.config["train"]["K"]):
-                self.masks.append(CustomDropout(
-                    dropout=self.config["train"]["dropout_sampling_dynamic"], size=self.config["train"]["hidden_size_dynamic"]))
+            with torch.no_grad():
+                for k in range(self.config["train"]["K"]):
+                    self.masks.append(CustomDropout(
+                        dropout=self.config["train"]["dropout_sampling_dynamic"], size=self.config["train"]["hidden_size_dynamic"]))
             # save trajectory
             trajectory = torch.empty(
                 (0, self.config["train"]["output_size_dynamic"]), dtype=torch.float32, device=device)
-            
+            trajectory.requires_grad=False
             # for each time step of T
             for i in range(self.config["train"]["T"]):
                 posteriors = torch.empty(
@@ -70,8 +71,9 @@ class DeepPilco:
                 for k in range(self.config["train"]["K"]):
                     self.particles.append(
                         self.sample_particles(mean=mean, std=std))
-                trajectory = torch.cat(
-                    (trajectory, torch.unsqueeze(mean, dim=0)), dim=0)
+                with torch.no_grad():
+                    trajectory = torch.cat(
+                            (trajectory, torch.unsqueeze(mean, dim=0)), dim=0)
         cost = cost / self.config["train"]["policy_batch_size"]
         return trajectory, cost
 
@@ -140,7 +142,7 @@ class DeepPilco:
                 diff = diff.repeat(
                     self.config["train"]["dynamic_training_particles"], 1)
                 loss = criterion(pred, diff)
-                loss.backward()
+                loss.backward(retain_graph=False)
                 optimizer.step()
                 losses += loss
         self.wandb.log(
@@ -183,7 +185,7 @@ class PolicyModel(nn.Module):
                                nn.Dropout(p=dropout_rate)])
         for i in range(hidden_layer):
             stack.append(nn.Linear(hidden_size, hidden_size))
-            stack.append(nn.ReLU())
+            stack.append(nn.LeakyReLU())
             stack.append(nn.Dropout(p=dropout_rate))
         self.mlp = nn.Sequential(*stack)
         self.final_layer = nn.Linear(hidden_size, output_size)
