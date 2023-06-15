@@ -198,6 +198,7 @@ class PolicyModel(nn.Module):
         return x
 
     def update(self, optimizer, cost, model):
+        cost = -cost
         cost.backward()
         # Gradient Norm Clipping
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)
