@@ -6,6 +6,9 @@ from torch.utils.data import Dataset, DataLoader
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 device = 'cpu'
 
+# TODO reparameterization trick for moment matching
+# correct gradient
+# replay buffer?
 
 class DeepPilco:
     def __init__(self, config, env, wandb):
@@ -25,8 +28,12 @@ class DeepPilco:
         state = torch.tensor(state[0], dtype=torch.float32)
         return state
 
-    def sample_particles(self, mean, std):
-        return torch.normal(mean=mean, std=std)
+    def sample_particles(self, posteriors):
+        mean = torch.mean(posteriors, dim=0, keepdim=True)
+        std = torch.std(posteriors, dim=0, keepdim=True)
+        scale = torch.randn(self.config["train"]["K"], mean.size(1)).to(device)
+        particles = mean + std * scale
+        return particles
 
     def predict_trajectories(self):
         # init cost
@@ -35,9 +42,12 @@ class DeepPilco:
         for j in range(self.config["train"]["policy_batch_size"]):
             # Initialise set of K particles
             self.particles = []
+            
             for k in range(self.config["train"]["K"]):
                 self.particles.append(
                     self.sample_particles_from_init(self.env).to(device=device))
+            self.particles = torch.stack(self.particles)
+            self.particles.requires_grad = True
             # Sample BNN dynamics model weights Wk for each k (i.e. sample seed values for dropout mask)
             self.masks = []
             with torch.no_grad():
@@ -67,10 +77,11 @@ class DeepPilco:
                 std = torch.std(posteriors, dim=0)
                 cost += self.cost(mean, std) * self.config["train"]["discount"]**i
                 # sample set of particles from gaussian
-                self.particles = []
-                for k in range(self.config["train"]["K"]):
-                    self.particles.append(
-                        self.sample_particles(mean=mean, std=std))
+                self.particles = self.sample_particles(posteriors)
+                # self.particles = []
+                # for k in range(self.config["train"]["K"]):
+                #     self.particles.append(
+                #         self.sample_particles(mean=mean, std=std))
                 with torch.no_grad():
                     trajectory = torch.cat(
                             (trajectory, torch.unsqueeze(mean, dim=0)), dim=0)
@@ -168,7 +179,7 @@ class DynamicsModel(nn.Module):
         x = torch.concat((x, action), dim=1)
         x = self.first_layer(x)
         x = dropout(x)
-        if torch.isnan(x).any():
+        if torch.isnan(x).any().item():
             print("nan")
         for layer in range(len(self.mlp)):
             x = self.mlp[layer](x)
@@ -203,6 +214,7 @@ class PolicyModel(nn.Module):
         # Gradient Norm Clipping
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)
         optimizer.step()
+        self.particles
 
 
 class RolloutDataset(Dataset):
