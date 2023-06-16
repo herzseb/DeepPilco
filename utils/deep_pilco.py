@@ -91,12 +91,22 @@ class DeepPilco:
     def cost(self, state, std=None):
         l1 = self.config["env"]["l1"]
         l2 = self.config["env"]["l2"]
-        d = torch.sqrt((state[3]*l1 + state[4]*l2 - (l1+l2))
-                       ** 2 + (state[1]*l1 + state[2]*l2)**2)
+        # state[1] = min(1, state[1])
+        # state[1] = max(-1, state[1])
+        # state[2] = min(1, state[2])
+        # state[2] = max(-1, state[2])
+        # state[3] = min(1, state[3])
+        # state[3] = max(-1, state[3])
+        # state[4] = min(1, state[4])
+        # state[4] = max(-1, state[4])
+        # d = torch.sqrt((state[3]*l1 + state[4]*l2 - (l1+l2))
+        #                ** 2 + 0.1 * (state[1]*l1 + state[2]*l2)**2)
+        d = 2 - state[3] + state[4]
+        cost = 1 - torch.exp(-0.5*(d**2)/self.config["env"]["cost_sigma"]**2)
         if std is not None:
             combined_var = std[1] + std[2] + std[3] + std[4]
-            d = d*combined_var
-        return 1 - torch.exp(-0.5*(d**2)/self.config["env"]["cost_sigma"]**2)
+            cost = cost * combined_var
+        return cost
 
     def sample_trajectory(self, env, T):
         rollout = []
@@ -199,7 +209,7 @@ class PolicyModel(nn.Module):
             stack.append(nn.LeakyReLU())
             stack.append(nn.Dropout(p=dropout_rate))
         self.mlp = nn.Sequential(*stack)
-        self.final_layer = nn.Linear(hidden_size, output_size)
+        self.final_layer = nn.Linear(hidden_size, output_size, bias=False)
         self.tanh = nn.Tanh()
 
     def forward(self, x):
@@ -214,7 +224,6 @@ class PolicyModel(nn.Module):
         # Gradient Norm Clipping
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)
         optimizer.step()
-        self.particles
 
 
 class RolloutDataset(Dataset):

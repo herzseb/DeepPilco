@@ -7,9 +7,14 @@ import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn as nn
+from copy import deepcopy
+import time
 from utils.deep_pilco import DeepPilco
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 device = 'cpu'
+
+timestr = time.strftime("%Y%m%d-%H%M%S")
+
 
 # TODO
 # remove FIXMES
@@ -32,7 +37,7 @@ def main(config, wandb):
     optimizer_dynamics_model = optim.SGD(
         agent.dynamics_model.parameters(), lr=0.001, momentum=0.9)
     optimizer_policy = optim.SGD(
-        agent.policy.parameters(), lr=0.00001, momentum=0.9)
+        agent.policy.parameters(), lr=1e-6, momentum=0.9)
     last_cost = np.inf
     rollouts = []
     # 3 repeat until convergence
@@ -61,6 +66,11 @@ def main(config, wandb):
         avg_costs = costs / config["train"]["epochs_policy"]
         print(f'Avg policy cost {avg_costs}')
         wandb.log({"policy avg cost": avg_costs})
+
+        if avg_costs < last_cost:
+            last_cost = avg_costs
+            best_model_state = deepcopy(agent.policy.state_dict())
+            torch.save(best_model_state, 'policy' + timestr + '.pth')
 
         # if torch.abs(cost - last_cost) < config["train"]["epsilon"]:
         #     break

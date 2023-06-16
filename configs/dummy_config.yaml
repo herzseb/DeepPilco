@@ -17,7 +17,7 @@
     hidden_layer_policy: 4
     dropout_training_policy: 0.05
     batch_size: 4
-    discount: 0.9
+    discount: 1
     epsilon: 0.00001
     epochs_dynamic: 10
     epochs_policy: 10
