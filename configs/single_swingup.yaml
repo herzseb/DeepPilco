@@ -2,17 +2,17 @@
     project: "DeepPilco"
 
 - train:
-    gym: 'InvertedDoublePendulum-v4'
+    gym: 'SingleSwingUp'
     seed: 1234
     T: 25
     K: 10
-    input_size_dynamic: 12
-    output_size_dynamic: 11
-    hidden_size_dynamic: 200
-    hidden_layer_dynamic: 4
+    input_size_dynamic: 5
+    output_size_dynamic: 4
+    hidden_size_dynamic: 100
+    hidden_layer_dynamic: 2
     dropout_training_dynamic: 0.05
     dropout_sampling_dynamic: 0.05
-    input_size_policy: 11
+    input_size_policy: 4
     output_size_policy: 1
     hidden_size_policy: 50
     hidden_layer_policy: 4
@@ -20,19 +20,16 @@
     batch_size: 4
     discount: 1
     epsilon: 0.00001
-    epochs_dynamic: 500
-    epochs_policy: 200
-    playback_len: 50
+    epochs_dynamic: 200
+    epochs_policy: 50
+    playback_len: 10
     costum_masks_for_dynamics_training: true
     dynamic_training_particles: 20
     policy_batch_size: 10
 
 - env:
-    init_mean_position: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    init_std_position: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    init_mean_position: [0, 0, 0, 0]
+    init_std_position: [1, 1, 1, 1]
     l1: 1
     l2: 1
     cost_sigma : 1
-
-
-

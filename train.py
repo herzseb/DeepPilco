@@ -10,10 +10,12 @@ import torch.nn as nn
 from copy import deepcopy
 import time
 from utils.deep_pilco import DeepPilco
+from utils.environment import CartPoleSwingUp
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 device = 'cpu'
 
 timestr = time.strftime("%Y%m%d-%H%M%S")
+print("Model saved: ", timestr)
 
 
 # TODO
@@ -25,7 +27,10 @@ timestr = time.strftime("%Y%m%d-%H%M%S")
 
 def main(config, wandb):
     # init environment
-    env = gym.make('InvertedDoublePendulum-v4')
+    if config["train"]["gym"] == 'InvertedDoublePendulum-v2' or config["train"]["gym"] == 'InvertedPendulum-v2':
+        env = gym.make(config["train"]["gym"])
+    elif config["train"]["gym"] == 'SingleSwingUp':
+        env = CartPoleSwingUp()
     # seeds 
     np.random.seed(config["train"]["seed"])
     torch.manual_seed(config["train"]["seed"])
@@ -34,10 +39,10 @@ def main(config, wandb):
     # initialise policy parameters randomly
     # agent.init_policy_parameters() # maybe add Xavier init
 
-    optimizer_dynamics_model = optim.SGD(
-        agent.dynamics_model.parameters(), lr=0.001, momentum=0.9)
-    optimizer_policy = optim.SGD(
-        agent.policy.parameters(), lr=1e-6, momentum=0.9)
+    optimizer_dynamics_model = optim.Adam(
+        agent.dynamics_model.parameters(), lr=1e-4)
+    optimizer_policy = optim.Adam(
+        agent.policy.parameters(), lr=1e-6)
     last_cost = np.inf
     rollouts = []
     # 3 repeat until convergence

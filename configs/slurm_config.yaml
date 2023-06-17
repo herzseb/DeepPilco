@@ -2,6 +2,7 @@
     project: "DeepPilco"
 
 - train:
+    gym: 'InvertedDoublePendulum-v2'
     seed: 1234
     T: 25
     K: 10

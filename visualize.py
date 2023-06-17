@@ -7,26 +7,38 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.deep_pilco import DeepPilco
+# from utils.environment import CustomGym, ExtendedCartPoleEnv, CartPoleSwingUp
+from utils.environment import CartPoleSwingUp
+from gym.wrappers.time_limit import TimeLimit
 
 def visualize(config):
-    env = gym.make('InvertedDoublePendulum-v4', render_mode="rgb_array")
-    env.action_space.seed(42)
-    env.reset()
+    max_episode_steps = 200
+    # env = ExtendedCartPoleEnv(render_mode="rgb_array")
+    env = CartPoleSwingUp()
+    # env = TimeLimit(env, max_episode_steps)
+    # env = CustomGym('InvertedPendulum-v4')
+    #env = gym.make('InvertedPendulum-v4', render_mode="rgb_array")
+    #env.reset_model(np.array([1.,0.,0.,0.]))
     agent = DeepPilco(config, env, None)
-    agent.policy.load_state_dict(torch.load("policy20230615-120942.pth"))
+    agent.policy.load_state_dict(torch.load("policy20230616-175214.pth"))
     agent.policy.eval()
-    observation, info = env.reset(seed=42)
+    #observation = env.reset_model(np.array([0.,np.pi,0.,0.]))
+    observation = env.reset()
 
     with torch.no_grad():
         for _ in range(1000):
             observation = torch.tensor(observation).to(dtype=torch.float32)
-            observation, reward, terminated, truncated, info = env.step(agent.policy(observation))
+            action = agent.policy(observation, eps=0)
+            print(action)
+            observation, _, _ , _ = env.step(action)
+            print(np.sqrt((1 - np.cos(observation[2]))** 2 + 0.1 * (np.sin(observation[2]))**2))
             #print(observation[1]**2 + observation[2]**2)
             # print(observation[1],observation[2],observation[3],  observation[4], np.abs(observation[1]) +  observation[4])
-            d = np.sqrt((observation[3]*1 + observation[4]*1 - (1+1))** 2 + 0.1 * (observation[1]*1 + observation[2]*1)**2)
-            print(d)
+            # d = np.sqrt((observation[3]*1 + observation[4]*1 - (1+1))** 2 + 0.1 * (observation[1]*1 + observation[2]*1)**2)
+            # print(d)
             # print(np.sin((np.arcsin(observation[2]) + 3.14159) - (1.57 + np.arcsin(observation[1]))))
             # print(observation[1:5])
+            #print(np.cos(observation[1]))
             img = env.render()
             plt.imshow(img)
             plt.show()

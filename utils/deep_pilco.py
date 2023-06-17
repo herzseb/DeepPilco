@@ -13,7 +13,7 @@ device = 'cpu'
 class DeepPilco:
     def __init__(self, config, env, wandb):
         self.policy = PolicyModel(input_size=config["train"]["input_size_policy"], hidden_size=config["train"]["hidden_size_policy"], hidden_layer=config["train"]
-                                  ["hidden_layer_policy"], output_size=config["train"]["output_size_policy"], dropout_rate=config["train"]["dropout_training_policy"])
+                                  ["hidden_layer_policy"], output_size=config["train"]["output_size_policy"], dropout_rate=config["train"]["dropout_training_policy"], env=config["train"]["hidden_size_policy"])
         self.policy = self.policy.to(device=device)
         self.dynamics_model = DynamicsModel(input_size=config["train"]["input_size_dynamic"], hidden_size=config["train"]["hidden_size_dynamic"],
                                             hidden_layer=config["train"]["hidden_layer_dynamic"], output_size=config["train"]["output_size_dynamic"])
@@ -25,7 +25,9 @@ class DeepPilco:
     def sample_particles_from_init(self, env):
         # return np.random.normal(loc=self.config["env"]["init_mean_position"], scale=self.config["env"]["init_std_position"], size=self.config["train"]["K"])
         state = env.reset()
-        state = torch.tensor(state[0], dtype=torch.float32)
+        if len(state.shape) > 1:
+            state = state[0]
+        state = torch.tensor(state, dtype=torch.float32)
         return state
 
     def sample_particles(self, posteriors):
@@ -66,7 +68,7 @@ class DeepPilco:
                 for particle, mask in zip(self.particles, self.masks):
                     # get action from policy
                     particle = torch.unsqueeze(particle, dim=0)
-                    action = self.policy(particle)
+                    action = self.policy(particle, eps=0.1)
                     # get posterior of weights W
                     delta_x = self.dynamics_model(
                         x=particle, action=action, dropout=mask)
@@ -91,30 +93,28 @@ class DeepPilco:
     def cost(self, state, std=None):
         l1 = self.config["env"]["l1"]
         l2 = self.config["env"]["l2"]
-        # state[1] = min(1, state[1])
-        # state[1] = max(-1, state[1])
-        # state[2] = min(1, state[2])
-        # state[2] = max(-1, state[2])
-        # state[3] = min(1, state[3])
-        # state[3] = max(-1, state[3])
-        # state[4] = min(1, state[4])
-        # state[4] = max(-1, state[4])
-        # d = torch.sqrt((state[3]*l1 + state[4]*l2 - (l1+l2))
-        #                ** 2 + 0.1 * (state[1]*l1 + state[2]*l2)**2)
-        d = 2 - state[3] + state[4]
+        if self.config["train"]["gym"] == 'InvertedDoublePendulum-v4':
+            # d = torch.sqrt((state[3]*l1 + state[4]*l2 - (l1+l2))** 2 + 0.1 * (state[1]*l1 + state[2]*l2)**2)
+            d = 2 - state[3] + state[4]
+        elif self.config["train"]["gym"] == 'InvertedPendulum-v4':
+            d = torch.sqrt((1 - torch.cos(state[1]))** 2 + 0.1 * (torch.sin(state[1]))**2)
+        elif self.config["train"]["gym"] == 'SingleSwingUp':
+            d = torch.sqrt((1 - torch.cos(state[2]))** 2 + 0.1 * (torch.sin(state[2]))**2)
         cost = 1 - torch.exp(-0.5*(d**2)/self.config["env"]["cost_sigma"]**2)
-        if std is not None:
-            combined_var = std[1] + std[2] + std[3] + std[4]
-            cost = cost * combined_var
+        # if std is not None:
+        #     combined_var = std[1] + std[2] + std[3] + std[4]
+        #     cost = cost * combined_var
         return cost
 
     def sample_trajectory(self, env, T):
         rollout = []
         state = env.reset()
-        state = torch.tensor(state[0], dtype=torch.float32).to(device=device)
+        if len(state.shape) > 1:
+            state = state[0]
+        state = torch.tensor(state, dtype=torch.float32).to(device=device)
         for i in range(T):
             state = state.to(device=device)
-            action = self.policy(state)
+            action = self.policy(state, eps=0.5)
             action = action.detach().to("cpu")
             self.wandb.log({"action": action})
             next_state = env.step(action)
@@ -199,7 +199,7 @@ class DynamicsModel(nn.Module):
 
 
 class PolicyModel(nn.Module):
-    def __init__(self, input_size, hidden_size, hidden_layer, output_size, dropout_rate):
+    def __init__(self, input_size, hidden_size, hidden_layer, output_size, dropout_rate, env):
         super(PolicyModel, self).__init__()
         stack = nn.ModuleList([nn.Linear(input_size, hidden_size),
                                nn.ReLU(),
@@ -211,18 +211,32 @@ class PolicyModel(nn.Module):
         self.mlp = nn.Sequential(*stack)
         self.final_layer = nn.Linear(hidden_size, output_size, bias=False)
         self.tanh = nn.Tanh()
+        self.scale = 1
+        if env == 'InvertedPendulum-v4' or env == 'SingleSwingUp':
+            self.scale = 3
 
-    def forward(self, x):
+    def forward(self, x, eps):
         x = self.mlp(x)
         x = self.final_layer(x)
         x = self.tanh(x)
+        x = x * self.scale
+        x = self.epsilon_greedy(eps, x)
         return x
+
+    def epsilon_greedy(self, eps, x):
+        if torch.rand(1) < eps:
+            eps_action = (torch.rand(1, device=device) - 0.5) * 2 * self.scale
+            if len(x.shape) == 2:
+                eps_action = torch.unsqueeze(eps_action,dim=0)
+            return eps_action
+        else:
+            return x
 
     def update(self, optimizer, cost, model):
         cost = -cost
         cost.backward()
         # Gradient Norm Clipping
-        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5, norm_type=2)
         optimizer.step()
 
 
